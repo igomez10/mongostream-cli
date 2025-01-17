@@ -44,17 +44,29 @@ func GetCmd() *cli.Command {
 			&cli.TimestampFlag{
 				Name:  "start-at",
 				Usage: "Start at timestamp:" + time.DateTime,
-				Value: time.Now(),
 				Config: cli.TimestampConfig{
 					Timezone: time.UTC,
 					Layouts:  []string{time.DateTime},
 				},
 			},
 			&cli.StringFlag{
+				Name:  "resume-token",
+				Usage: "Resume token",
+			},
+			&cli.StringFlag{
 				Name:    "output",
 				Aliases: []string{"o"},
 				Usage:   "Output format: json , table",
 				Value:   "json",
+			},
+			&cli.BoolFlag{
+				Name:  "include-event-id",
+				Usage: "Include event id",
+				Value: false,
+			}, &cli.BoolFlag{
+				Name:  "show-full-document",
+				Usage: "Show full document",
+				Value: false,
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
@@ -63,8 +75,16 @@ func GetCmd() *cli.Command {
 			collectionName := c.String("collection")
 			pipelineFlag := c.String("pipeline")
 			startAt := c.Timestamp("start-at")
+			resumeToken := c.String("resume-token")
+			includeEventID := c.Bool("include-event-id")
+			showFullDocument := c.Bool("show-full-document")
 			opts := options.Client().ApplyURI(url)
 			output := c.String("output")
+
+			if !startAt.IsZero() && c.String("resume-token") != "" {
+				log.Fatal("Cannot use both start-at and resume-token")
+			}
+
 			mongoclient, err := mongo.Connect(ctx, opts)
 			if err != nil {
 				log.Fatal(err)
@@ -74,8 +94,16 @@ func GetCmd() *cli.Command {
 			pipeline := bson.Raw([]byte(pipelineFlag))
 			collection := mongoclient.Database(databaseName).Collection(collectionName)
 			streamOpts := options.ChangeStream()
-			ts := &primitive.Timestamp{T: uint32(startAt.Unix()), I: 1}
-			streamOpts.SetStartAtOperationTime(ts)
+
+			if !startAt.IsZero() {
+				ts := &primitive.Timestamp{T: uint32(startAt.Unix()), I: 1}
+				streamOpts.SetStartAtOperationTime(ts)
+			}
+
+			if resumeToken != "" {
+				streamOpts.SetResumeAfter(bson.M{"_data": resumeToken})
+			}
+
 			stream, err := collection.Watch(ctx, pipeline, streamOpts)
 			if err != nil {
 				log.Fatal(err)
@@ -96,11 +124,20 @@ func GetCmd() *cli.Command {
 
 					clusterTime := time.Unix(int64(event.ClusterTime.T), int64(event.ClusterTime.I)).UTC().String()
 					docString := event.FullDocument.String()
-					if len(docString) > 100 {
+					if len(docString) > 100 && !showFullDocument {
 						docString = event.FullDocument.String()[:100] + "..."
 					}
 
-					row := table.Row{clusterTime, event.OperationType, event.Ns.Db, event.Ns.Coll, docString}
+					columns := []interface{}{}
+					if includeEventID {
+						columns = append(columns, event.ID.Data)
+					}
+
+					columns = append(columns, clusterTime, event.OperationType, event.DocumentKey.ID.Hex(), event.Ns.Db, event.Ns.Coll, docString)
+					row := table.Row{}
+					for i := range columns {
+						row = append(row, columns[i])
+					}
 					t.AppendRow(row)
 					t.Render()
 				default:
@@ -112,8 +149,12 @@ func GetCmd() *cli.Command {
 	}
 }
 
+type EventID struct {
+	Data string `bson:"_data"`
+}
+
 type StreamEvent struct {
-	// ID            primitive.ObjectID `bson:"_id"`
+	ID            EventID  `bson:"_id"`
 	OperationType string   `bson:"operationType"`
 	FullDocument  bson.Raw `bson:"fullDocument"`
 	Ns            struct {

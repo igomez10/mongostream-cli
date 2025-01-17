@@ -1,4 +1,4 @@
-module github.com/igomez10/mongocli
+module github.com/igomez10/mongostream-cli
 
 go 1.23.0
 

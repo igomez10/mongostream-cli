@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/igomez10/mongocli/commands/stream"
+	"github.com/igomez10/mongostream-cli/commands/stream"
 	"github.com/urfave/cli/v3"
 )
 
