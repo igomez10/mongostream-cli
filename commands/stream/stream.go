@@ -139,7 +139,7 @@ func GetCmd() *cli.Command {
 						columns = append(columns, event.ID.Data)
 					}
 
-					columns = append(columns, clusterTime, event.OperationType, event.DocumentKey.ID.Hex(), event.Ns.Db, event.Ns.Coll, docString)
+					columns = append(columns, clusterTime, event.OperationType, event.DocumentKey.ID.Hex(), docString)
 					row := table.Row{}
 					for i := range columns {
 						row = append(row, columns[i])
