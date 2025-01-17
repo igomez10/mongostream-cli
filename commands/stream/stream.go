@@ -68,6 +68,10 @@ func GetCmd() *cli.Command {
 				Usage: "Show full document",
 				Value: false,
 			},
+			&cli.IntFlag{
+				Name:  "limit",
+				Usage: "Limit the number of documents",
+			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			url := c.String("url")
@@ -78,6 +82,7 @@ func GetCmd() *cli.Command {
 			resumeToken := c.String("resume-token")
 			includeEventID := c.Bool("include-event-id")
 			showFullDocument := c.Bool("show-full-document")
+			limit := c.Int("limit")
 			opts := options.Client().ApplyURI(url)
 			output := c.String("output")
 
@@ -109,6 +114,7 @@ func GetCmd() *cli.Command {
 				log.Fatal(err)
 			}
 
+			counter := 0
 			for stream.Next(ctx) {
 				current := stream.Current
 				switch output {
@@ -142,6 +148,10 @@ func GetCmd() *cli.Command {
 					t.Render()
 				default:
 					fmt.Println("Invalid output format")
+				}
+				counter++
+				if counter == int(limit) {
+					break
 				}
 			}
 			return nil
