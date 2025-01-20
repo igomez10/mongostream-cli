@@ -2,7 +2,6 @@ package stream
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -69,6 +68,11 @@ func GetCmd() *cli.Command {
 				Usage:       "Limit the number of documents",
 				HideDefault: true,
 			},
+			&cli.StringFlag{
+				Name:        "pipeline",
+				Usage:       `Pipeline: {"$match":{"$or":[{"operationType":"insert"},{"operationType":"replace"}]}`,
+				HideDefault: true,
+			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 
@@ -79,6 +83,7 @@ func GetCmd() *cli.Command {
 			databaseName := c.String("database")
 			collectionName := c.String("collection")
 			startAt := c.Timestamp("start-at")
+			pipelineFlag := c.String("pipeline")
 			resumeToken := c.String("resume-token")
 			includeEventID := c.Bool("include-event-id")
 			showFullDocument := c.Bool("show-full-document")
@@ -108,7 +113,12 @@ func GetCmd() *cli.Command {
 				streamOpts.SetResumeAfter(bson.M{"_data": resumeToken})
 			}
 
-			stream, err := collection.Watch(ctx, mongo.Pipeline{}, streamOpts)
+			unmarshaledPipeline := bson.D{}
+			if err := bson.UnmarshalExtJSON([]byte(pipelineFlag), false, &unmarshaledPipeline); err != nil {
+				log.Fatal(err)
+			}
+
+			stream, err := collection.Watch(ctx, []bson.D{unmarshaledPipeline}, streamOpts)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -127,7 +137,6 @@ func GetCmd() *cli.Command {
 						log.Fatal(err)
 					}
 
-					// clusterTime := time.Unix(int64(event.ClusterTime.T), int64(event.ClusterTime.I)).UTC().String()
 					docString := event.FullDocument.String()
 					if len(docString) > 100 && !showFullDocument {
 						docString = event.FullDocument.String()[:100] + "..."
@@ -192,26 +201,4 @@ func (s StreamEvent) ToTable(includeFullDocument bool) string {
 		}
 	}
 	return builder.String()
-}
-
-func StringToBsonD(jsonStr string) (bson.D, error) {
-	// First convert string to map
-	var jsonMap map[string]interface{}
-	if err := json.Unmarshal([]byte(jsonStr), &jsonMap); err != nil {
-		return nil, fmt.Errorf("error unmarshaling JSON: %v", err)
-	}
-
-	// Convert map to BSON bytes
-	bsonBytes, err := bson.Marshal(jsonMap)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling to BSON: %v", err)
-	}
-
-	// Unmarshal BSON bytes to bson.D
-	var bsonD bson.D
-	if err := bson.Unmarshal(bsonBytes, &bsonD); err != nil {
-		return nil, fmt.Errorf("error unmarshaling to bson.D: %v", err)
-	}
-
-	return bsonD, nil
 }

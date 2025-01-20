@@ -24,6 +24,7 @@ OPTIONS:
    --output value, -o value  Output format: json , table (default: "json")
    --include-event-id        Include event id (default: false)
    --show-full-document      Show full document (default: false)
-   --limit value             Limit the number of documents (default: 0)
+   --limit value             Limit the number of documents
+   --pipeline value          Pipeline: {"$match":{"$or":[{"operationType":"insert"},{"operationType":"replace"}]}
    --help, -h                show help
 ```
