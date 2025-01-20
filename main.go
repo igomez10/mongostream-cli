@@ -12,7 +12,7 @@ import (
 func main() {
 	ctx := context.Background()
 	cmd := &cli.Command{
-		Name:                  "mongocli",
+		Name:                  "mongostream-cli",
 		EnableShellCompletion: true,
 		Usage:                 "CLI for MongoDB",
 		ExitErrHandler: func(ctx context.Context, c *cli.Command, err error) {
