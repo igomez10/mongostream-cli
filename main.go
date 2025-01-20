@@ -24,5 +24,8 @@ func main() {
 		},
 	}
 
-	cmd.Run(ctx, os.Args)
+	if err := cmd.Run(ctx, os.Args); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
