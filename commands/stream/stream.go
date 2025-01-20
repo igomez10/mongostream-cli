@@ -70,7 +70,7 @@ func GetCmd() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:        "pipeline",
-				Usage:       `Pipeline: {"$match":{"$or":[{"operationType":"insert"},{"operationType":"replace"}]}`,
+				Usage:       `Pipeline: {"$match":{"$or":[{"operationType":"insert"},{"operationType":"replace"}]}}`,
 				HideDefault: true,
 			},
 		},
