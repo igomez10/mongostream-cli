@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -30,11 +31,6 @@ func GetCmd() *cli.Command {
 				Name:     "collection",
 				Usage:    "Collection name: mycollection",
 				Required: true,
-			},
-			&cli.StringFlag{
-				Name:  "pipeline",
-				Usage: "Pipeline: {}",
-				Value: "",
 			},
 			&cli.StringFlag{
 				Name:     "url",
@@ -74,10 +70,13 @@ func GetCmd() *cli.Command {
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
+
+			// set log stack trace
+			log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 			url := c.String("url")
 			databaseName := c.String("database")
 			collectionName := c.String("collection")
-			pipelineFlag := c.String("pipeline")
 			startAt := c.Timestamp("start-at")
 			resumeToken := c.String("resume-token")
 			includeEventID := c.Bool("include-event-id")
@@ -96,7 +95,6 @@ func GetCmd() *cli.Command {
 			}
 
 			defer mongoclient.Disconnect(ctx)
-			pipeline := bson.Raw([]byte(pipelineFlag))
 			collection := mongoclient.Database(databaseName).Collection(collectionName)
 			streamOpts := options.ChangeStream()
 
@@ -109,7 +107,7 @@ func GetCmd() *cli.Command {
 				streamOpts.SetResumeAfter(bson.M{"_data": resumeToken})
 			}
 
-			stream, err := collection.Watch(ctx, pipeline, streamOpts)
+			stream, err := collection.Watch(ctx, mongo.Pipeline{}, streamOpts)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -128,7 +126,7 @@ func GetCmd() *cli.Command {
 						log.Fatal(err)
 					}
 
-					clusterTime := time.Unix(int64(event.ClusterTime.T), int64(event.ClusterTime.I)).UTC().String()
+					// clusterTime := time.Unix(int64(event.ClusterTime.T), int64(event.ClusterTime.I)).UTC().String()
 					docString := event.FullDocument.String()
 					if len(docString) > 100 && !showFullDocument {
 						docString = event.FullDocument.String()[:100] + "..."
@@ -139,7 +137,7 @@ func GetCmd() *cli.Command {
 						columns = append(columns, event.ID.Data)
 					}
 
-					columns = append(columns, clusterTime, event.OperationType, event.DocumentKey.ID.Hex(), docString)
+					columns = append(columns, event.WallTime.String(), event.OperationType, event.DocumentKey.ID.Hex(), docString)
 					row := table.Row{}
 					for i := range columns {
 						row = append(row, columns[i])
@@ -164,9 +162,11 @@ type EventID struct {
 }
 
 type StreamEvent struct {
-	ID            EventID  `bson:"_id"`
-	OperationType string   `bson:"operationType"`
-	FullDocument  bson.Raw `bson:"fullDocument"`
+	ID EventID `bson:"_id"`
+	// ClusterTime   bson.MongoTimestamp `bson:"clusterTime"`
+	WallTime      time.Time `bson:"wallTime"`
+	OperationType string    `bson:"operationType"`
+	FullDocument  bson.Raw  `bson:"fullDocument"`
 	Ns            struct {
 		Db   string `bson:"db"`
 		Coll string `bson:"coll"`
@@ -174,11 +174,11 @@ type StreamEvent struct {
 	DocumentKey struct {
 		ID primitive.ObjectID `bson:"_id"`
 	} `bson:"documentKey"`
-	ClusterTime primitive.Timestamp `bson:"clusterTime"`
 }
 
 func (s StreamEvent) ToTable(includeFullDocument bool) string {
-	clusterTime := time.Unix(int64(s.ClusterTime.T), int64(s.ClusterTime.I)).String()
+	clusterTime := s.WallTime.String()
+	// time.Unix(int64(s.ClusterTime.T), int64(s.ClusterTime.I)).String()
 	builder := strings.Builder{}
 	builder.WriteString(fmt.Sprintf("%s %s %s %s ", clusterTime, s.OperationType, s.Ns.Db, s.Ns.Coll))
 	if includeFullDocument {
@@ -191,4 +191,26 @@ func (s StreamEvent) ToTable(includeFullDocument bool) string {
 		}
 	}
 	return builder.String()
+}
+
+func StringToBsonD(jsonStr string) (bson.D, error) {
+	// First convert string to map
+	var jsonMap map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &jsonMap); err != nil {
+		return nil, fmt.Errorf("error unmarshaling JSON: %v", err)
+	}
+
+	// Convert map to BSON bytes
+	bsonBytes, err := bson.Marshal(jsonMap)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling to BSON: %v", err)
+	}
+
+	// Unmarshal BSON bytes to bson.D
+	var bsonD bson.D
+	if err := bson.Unmarshal(bsonBytes, &bsonD); err != nil {
+		return nil, fmt.Errorf("error unmarshaling to bson.D: %v", err)
+	}
+
+	return bsonD, nil
 }
