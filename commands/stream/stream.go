@@ -113,12 +113,16 @@ func GetCmd() *cli.Command {
 				streamOpts.SetResumeAfter(bson.M{"_data": resumeToken})
 			}
 
-			unmarshaledPipeline := bson.D{}
-			if err := bson.UnmarshalExtJSON([]byte(pipelineFlag), false, &unmarshaledPipeline); err != nil {
-				log.Fatal(err)
+			pipeline := mongo.Pipeline{}
+			if pipelineFlag != "" {
+				unmarshaledPipeline := bson.D{}
+				if err := bson.UnmarshalExtJSON([]byte(pipelineFlag), false, &unmarshaledPipeline); err != nil {
+					log.Fatal(err)
+				}
+				pipeline = append(pipeline, unmarshaledPipeline)
 			}
 
-			stream, err := collection.Watch(ctx, []bson.D{unmarshaledPipeline}, streamOpts)
+			stream, err := collection.Watch(ctx, pipeline, streamOpts)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -144,10 +148,10 @@ func GetCmd() *cli.Command {
 
 					columns := []interface{}{}
 					if includeEventID {
-						columns = append(columns, event.ID.Data)
+						columns = append(columns, event.ID)
 					}
 
-					columns = append(columns, event.WallTime.String(), event.OperationType, event.DocumentKey.ID.Hex(), docString)
+					columns = append(columns, event.WallTime.String(), event.OperationType, event.DocumentKey, docString)
 					row := table.Row{}
 					for i := range columns {
 						row = append(row, columns[i])
@@ -172,8 +176,7 @@ type EventID struct {
 }
 
 type StreamEvent struct {
-	ID EventID `bson:"_id"`
-	// ClusterTime   bson.MongoTimestamp `bson:"clusterTime"`
+	ID            any       `bson:"_id"`
 	WallTime      time.Time `bson:"wallTime"`
 	OperationType string    `bson:"operationType"`
 	FullDocument  bson.Raw  `bson:"fullDocument"`
@@ -181,9 +184,7 @@ type StreamEvent struct {
 		Db   string `bson:"db"`
 		Coll string `bson:"coll"`
 	} `bson:"ns"`
-	DocumentKey struct {
-		ID primitive.ObjectID `bson:"_id"`
-	} `bson:"documentKey"`
+	DocumentKey any `bson:"documentKey"`
 }
 
 func (s StreamEvent) ToTable(includeFullDocument bool) string {
