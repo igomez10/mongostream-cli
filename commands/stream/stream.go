@@ -189,7 +189,6 @@ type StreamEvent struct {
 
 func (s StreamEvent) ToTable(includeFullDocument bool) string {
 	clusterTime := s.WallTime.String()
-	// time.Unix(int64(s.ClusterTime.T), int64(s.ClusterTime.I)).String()
 	builder := strings.Builder{}
 	builder.WriteString(fmt.Sprintf("%s %s %s %s ", clusterTime, s.OperationType, s.Ns.Db, s.Ns.Coll))
 	if includeFullDocument {
