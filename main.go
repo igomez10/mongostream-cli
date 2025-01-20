@@ -14,7 +14,7 @@ func main() {
 	cmd := &cli.Command{
 		Name:                  "mongostream-cli",
 		EnableShellCompletion: true,
-		Usage:                 "CLI for MongoDB",
+		Usage:                 "CLI for MongoDB Change Streams",
 		ExitErrHandler: func(ctx context.Context, c *cli.Command, err error) {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)
