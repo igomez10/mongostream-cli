@@ -1,7 +1,9 @@
-# mongocli
+# mongostream-cli
 
 
 ```bash
+go install github.com/igomez10/mongostream-cli
+
 mongostream-cli stream --database databasename  --collection users  --url <someurl> --o table  --start-at "2025-01-12 00:00:00"
 ```
 
