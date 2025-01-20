@@ -65,8 +65,9 @@ func GetCmd() *cli.Command {
 				Value: false,
 			},
 			&cli.IntFlag{
-				Name:  "limit",
-				Usage: "Limit the number of documents",
+				Name:        "limit",
+				Usage:       "Limit the number of documents",
+				HideDefault: true,
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
