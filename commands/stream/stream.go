@@ -91,8 +91,8 @@ func GetCmd() *cli.Command {
 			opts := options.Client().ApplyURI(url)
 			output := c.String("output")
 
-			if !startAt.IsZero() && c.String("resume-token") != "" {
-				log.Fatal("Cannot use both start-at and resume-token")
+			if err := validateStartAtResume(startAt, resumeToken); err != nil {
+				log.Fatal(err)
 			}
 
 			mongoclient, err := mongo.Connect(ctx, opts)
@@ -113,13 +113,9 @@ func GetCmd() *cli.Command {
 				streamOpts.SetResumeAfter(bson.M{"_data": resumeToken})
 			}
 
-			pipeline := mongo.Pipeline{}
-			if pipelineFlag != "" {
-				unmarshaledPipeline := bson.D{}
-				if err := bson.UnmarshalExtJSON([]byte(pipelineFlag), false, &unmarshaledPipeline); err != nil {
-					log.Fatal(err)
-				}
-				pipeline = append(pipeline, unmarshaledPipeline)
+			pipeline, err := parsePipeline(pipelineFlag)
+			if err != nil {
+				log.Fatal(err)
 			}
 
 			stream, err := collection.Watch(ctx, pipeline, streamOpts)
@@ -141,21 +137,7 @@ func GetCmd() *cli.Command {
 						log.Fatal(err)
 					}
 
-					docString := event.FullDocument.String()
-					if len(docString) > 100 && !showFullDocument {
-						docString = event.FullDocument.String()[:100] + "..."
-					}
-
-					columns := []interface{}{}
-					if includeEventID {
-						columns = append(columns, event.ID)
-					}
-
-					columns = append(columns, event.WallTime.String(), event.OperationType, event.DocumentKey, docString)
-					row := table.Row{}
-					for i := range columns {
-						row = append(row, columns[i])
-					}
+					row := formatTableRow(event, includeEventID, showFullDocument)
 					t.AppendRow(row)
 					t.Render()
 				default:
@@ -169,6 +151,45 @@ func GetCmd() *cli.Command {
 			return nil
 		},
 	}
+}
+
+func validateStartAtResume(startAt time.Time, resumeToken string) error {
+	if !startAt.IsZero() && resumeToken != "" {
+		return fmt.Errorf("Cannot use both start-at and resume-token")
+	}
+	return nil
+}
+
+func parsePipeline(pipelineFlag string) (mongo.Pipeline, error) {
+	pipeline := mongo.Pipeline{}
+	if pipelineFlag == "" {
+		return pipeline, nil
+	}
+
+	unmarshaledPipeline := bson.D{}
+	if err := bson.UnmarshalExtJSON([]byte(pipelineFlag), false, &unmarshaledPipeline); err != nil {
+		return nil, err
+	}
+	return append(pipeline, unmarshaledPipeline), nil
+}
+
+func formatTableRow(event StreamEvent, includeEventID, showFullDocument bool) table.Row {
+	docString := event.FullDocument.String()
+	if len(docString) > 100 && !showFullDocument {
+		docString = docString[:100] + "..."
+	}
+
+	columns := []interface{}{}
+	if includeEventID {
+		columns = append(columns, event.ID)
+	}
+
+	columns = append(columns, event.WallTime.String(), event.OperationType, event.DocumentKey, docString)
+	row := table.Row{}
+	for i := range columns {
+		row = append(row, columns[i])
+	}
+	return row
 }
 
 type EventID struct {
